@@ -18,10 +18,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # اطلاعات بات و کانال‌ها
-BOT_TOKEN = os.getenv("BOT2_TOKEN")  
-STORAGE_CHANNEL = int(os.getenv("STORAGE_CHANNEL", "0").strip('"'))
+BOT_TOKEN = os.getenv("BOT1_TOKEN", "").strip()  
+STORAGE_CHANNEL = int(os.getenv("STORAGE_CHANNEL", "0").strip('"'))  
 REQUIRED_CHANNELS = os.getenv("REQUIRED_CHANNELS", "").split(",")
-salt = os.getenv("salt")
+salt = os.getenv("salt", "").strip()
 
 # Use the same salt and configuration as Bot 1
 hashids = Hashids(salt=salt, min_length=6)
@@ -29,6 +29,9 @@ hashids = Hashids(salt=salt, min_length=6)
 # تنظیمات محدودیت نرخ
 RATE_LIMIT = 20  # حداکثر ۲۰ پیام در دقیقه (مطابق محدودیت تلگرام)
 semaphore = asyncio.Semaphore(RATE_LIMIT // 2)  # کنترل همزمانی
+
+# ذخیره کاربران و محتواهای درخواست شده
+pending_verifications = {}
 
 def decode_movie_token(token: str) -> list:
     """Decode token into list of message IDs"""
@@ -111,7 +114,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         for token in tokens:
             decoded_ids = decode_movie_token(token)
             content_codes.extend(str(id) for id in decoded_ids)
-    
+
+    pending_verifications[user.id] = content_codes  # ذخیره درخواست‌های در انتظار
+
     try:
         unjoined_channels = await get_unjoined_channels(user.id, context)
         if not unjoined_channels:
@@ -136,7 +141,9 @@ async def verify_membership(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     try:
         unjoined_channels = await get_unjoined_channels(query.from_user.id, context)
         if not unjoined_channels:
-            await query.edit_message_text("✅ عضویت شما تأیید شد! اکنون می‌توانید به محتوای رسانه‌ای دسترسی داشته باشید.")
+            await query.edit_message_text("✅ عضویت شما تأیید شد! اکنون محتوای درخواستی ارسال خواهد شد.")
+            if query.from_user.id in pending_verifications:
+                await send_timed_messages(query.from_user.id, context, pending_verifications.pop(query.from_user.id))
         else:
             await query.edit_message_text(
                 "⚠️ شما هنوز در تمام کانال‌ها عضو نشده‌اید. لطفاً ابتدا عضو شوید:",
@@ -145,13 +152,11 @@ async def verify_membership(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     except Exception as e:
         logger.error(f"خطا در بررسی عضویت کاربر {query.from_user.id}: {e}")
         await query.edit_message_text("⚠️ مشکلی در بررسی عضویت رخ داده است. لطفاً مجدداً تلاش کنید.")
-
-# راه‌اندازی ربات
 def main():
     application = (
         Application.builder()
         .token(BOT_TOKEN)
-        .concurrent_updates(True)  # فعال‌سازی پردازش غیرهمزمان
+        .concurrent_updates(True)
         .pool_timeout(100)
         .get_updates_http_version("1.1")
         .http_version("1.1")
