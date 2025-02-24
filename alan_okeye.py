@@ -152,19 +152,3 @@ async def verify_membership(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     except Exception as e:
         logger.error(f"خطا در بررسی عضویت کاربر {query.from_user.id}: {e}")
         await query.edit_message_text("⚠️ مشکلی در بررسی عضویت رخ داده است. لطفاً مجدداً تلاش کنید.")
-def main():
-    application = (
-        Application.builder()
-        .token(BOT_TOKEN)
-        .concurrent_updates(True)
-        .pool_timeout(100)
-        .get_updates_http_version("1.1")
-        .http_version("1.1")
-        .build()
-    )
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(verify_membership, pattern="verify"))
-    application.run_polling()
-
-if __name__ == '__main__':
-    main()
